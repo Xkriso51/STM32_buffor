@@ -50,8 +50,8 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-char Buf_TX[BUF_TX_LEN];
-char Buf_RX[BUF_RX_LEN];
+uint8_t Buf_TX[BUF_TX_LEN];
+uint8_t Buf_RX[BUF_RX_LEN];
 __IO int emptyTX=0;
 __IO int busyTX=0;
 __IO int emptyRX=0;
@@ -59,7 +59,7 @@ __IO int busyRX=0;
 
 
 char bfr[261]; //ramka
-volatile uint16_t pid=0;//wskaźnik ramki
+volatile uint16_t pidx=0;//wskaźnik ramki
 volatile uint8_t statframe=0; //status ramki
 char order[256]; //tablica polecenia
 
@@ -161,11 +161,14 @@ void doner(char *ord){
 }
 
 void get_line(){
-
+	//Zmienić sposób bez stat frame jedno pobranie pliku i sprawdzenie
+	//Nie używać toupper bo to użytkownika ma dobrze wpisywać
+	//Napisać sume kontrolna
+	//Jakies funckjonalnosci - rozpoczac PWMa
 	if(statframe==0)
 	{
 		char temp = get_char();
-		bfr[pid]=temp;
+		bfr[pidx]=temp;
 
 		if(temp == 0x05)
 		{
@@ -173,37 +176,37 @@ void get_line(){
 		}
 	}
 	else if(statframe==1){
-		pid++;
-		if(pid > 261){
-			pid=0;
+		pidx++;
+		if(pidx > 261){
+			pidx=0;
 			statframe=0;
 
 		}
 		char temp = get_char();
-		bfr[pid]=temp;
+		bfr[pidx]=temp;
 		if(temp == 0x05){
-			pid=0;
+			pidx=0;
 		}
 		if(temp == 0x04){
 
 			fsend(bfr);
 			fsend("\r\n");
-			int ordpid;
+			int ordpidx;
 			int poi=1;
-			for(int i=1;i<=pid;i++){
+			for(int i=1;i<=pidx;i++){
 				if(bfr[i] == ';'){
 					memset(&order[0],0,sizeof(order));
-					ordpid=0;
+					ordpidx=0;
 					while(poi<=i){
-						order[ordpid]=bfr[poi];
-						ordpid++;
+						order[ordpidx]=bfr[poi];
+						ordpidx++;
 						poi++;
 					}
-					ordpid=i+1;
+					ordpidx=i+1;
 					doner(order);
 				}
 			}
-			pid=0;
+			pidx=0;
 			statframe=0;
 
 

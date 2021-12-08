@@ -61,8 +61,8 @@ all: main-build
 main-build: ProjektowaPlyta.elf secondary-outputs
 
 # Tool invocations
-ProjektowaPlyta.elf: $(OBJS) $(USER_OBJS) C:\Users\it\STM32CubeIDE\workspace_1.7.0\ProjektowaPlyta\STM32F103RBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "ProjektowaPlyta.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\it\STM32CubeIDE\workspace_1.7.0\ProjektowaPlyta\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="ProjektowaPlyta.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+ProjektowaPlyta.elf: $(OBJS) $(USER_OBJS) C:\Users\it\STM32CubeIDE\workspace_1.7.0\STM32_buffor\ProjektowaPlyta\STM32F103RBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "ProjektowaPlyta.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\it\STM32CubeIDE\workspace_1.7.0\STM32_buffor\ProjektowaPlyta\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="ProjektowaPlyta.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
