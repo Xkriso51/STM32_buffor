@@ -62,6 +62,7 @@ char bfr[261]; //ramka
 volatile uint16_t pidx=0;//wskaźnik ramki
 volatile uint8_t statframe=0; //status ramki
 char order[256]; //tablica polecenia
+char hex[2]; //wartosc hexadecymalna sumy
 
 int czas=10;//wartosc domyslna dla FTIME
 int wart=100;//wartosc domyslna dla FSIZE
@@ -160,23 +161,23 @@ void doner(char *ord){
 
 }
 
-void checksum(char *buffer){
+int checksum(char *buffer){
 	int suma = 0;
 	int i;
-	char compSum[256];
-	memset(&compSum,buffer[0],sizeof(compSum));
-	fsend(compSum);
-	for(i = 0;i<strlen(compSum);i++){
-		suma=suma+compSum[i];
+	char userSum[2];
+	userSum[0]=buffer[strlen(buffer)-3];
+	userSum[1]=buffer[strlen(buffer)-2];
+
+	for(i = 0;i<strlen(buffer)-3;i++){
+		suma=suma+buffer[i];
 	}
+
 	int mod=suma%256;
 
-	char userSum[2];
-	userSum[0]=buffer[sizeof(buffer)-2];
-	userSum[1]=buffer[sizeof(buffer)-1];
+
 
 	long temp;
-	char hex[2];
+
 	int j=0;
 	while (mod != 0){
 		temp = mod % 16;
@@ -186,8 +187,15 @@ void checksum(char *buffer){
 		    hex[j++] = 55 + temp;
 		mod = mod / 16;
 	}
-	//fsend(userSum);
-	//fsend(hex);
+
+	if(hex[1]==userSum[0] && hex[0]==userSum[1])
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
 
 }
 void get_line(){
@@ -222,20 +230,28 @@ void get_line(){
 			fsend("\r\n");
 			int ordpidx;
 			int poi=0;
-			checksum(bfr);
-			/*for(int i=1;i<=pidx;i++){
-				if(bfr[i] == ';'){
-					memset(&order[0],0,sizeof(order));
-					ordpidx=0;
-					while(poi<=i){
-						order[ordpidx]=bfr[poi];
-						ordpidx++;
-						poi++;
-					}
-					ordpidx=i+1;
-					doner(order);
-				}
-			}*/
+			if(checksum(bfr)==1)
+			{
+				for(int i=1;i<=pidx;i++){
+								if(bfr[i] == ';'){
+									memset(&order[0],0,sizeof(order));
+									ordpidx=0;
+									while(poi<=i){
+										order[ordpidx]=bfr[poi];
+										ordpidx++;
+										poi++;
+									}
+									ordpidx=i+1;
+									doner(order);
+								}
+							}
+			}
+			else{
+				fsend("WRCHS%c%c",hex[1],hex[0]);
+				fsend("\r\n");
+			}
+
+
 			pidx=0;
 			statframe=0;
 
