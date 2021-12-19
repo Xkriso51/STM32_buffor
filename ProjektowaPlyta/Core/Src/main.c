@@ -160,19 +160,49 @@ void doner(char *ord){
 
 }
 
+void checksum(char *buffer){
+	int suma = 0;
+	int i;
+	char compSum[256];
+	memset(&compSum,buffer[0],sizeof(compSum));
+	fsend(compSum);
+	for(i = 0;i<strlen(compSum);i++){
+		suma=suma+compSum[i];
+	}
+	int mod=suma%256;
+
+	char userSum[2];
+	userSum[0]=buffer[sizeof(buffer)-2];
+	userSum[1]=buffer[sizeof(buffer)-1];
+
+	long temp;
+	char hex[2];
+	int j=0;
+	while (mod != 0){
+		temp = mod % 16;
+		if (temp < 10)
+			hex[j++] = 48 + temp;
+		else
+		    hex[j++] = 55 + temp;
+		mod = mod / 16;
+	}
+	//fsend(userSum);
+	//fsend(hex);
+
+}
 void get_line(){
 	//Zmienić sposób bez stat frame jedno pobranie pliku i sprawdzenie
-	//Nie używać toupper bo to użytkownika ma dobrze wpisywać
 	//Napisać sume kontrolna
 	//Jakies funckjonalnosci - rozpoczac PWMa
+	char temp = get_char();
+	bfr[pidx]=temp;
+
 	if(statframe==0)
 	{
-		char temp = get_char();
-		bfr[pidx]=temp;
-
 		if(temp == 0x05)
 		{
 			statframe=1;
+			memset(&bfr[0],0,sizeof(bfr));
 		}
 	}
 	else if(statframe==1){
@@ -182,8 +212,7 @@ void get_line(){
 			statframe=0;
 
 		}
-		char temp = get_char();
-		bfr[pidx]=temp;
+
 		if(temp == 0x05){
 			pidx=0;
 		}
@@ -192,8 +221,9 @@ void get_line(){
 			fsend(bfr);
 			fsend("\r\n");
 			int ordpidx;
-			int poi=1;
-			for(int i=1;i<=pidx;i++){
+			int poi=0;
+			checksum(bfr);
+			/*for(int i=1;i<=pidx;i++){
 				if(bfr[i] == ';'){
 					memset(&order[0],0,sizeof(order));
 					ordpidx=0;
@@ -205,7 +235,7 @@ void get_line(){
 					ordpidx=i+1;
 					doner(order);
 				}
-			}
+			}*/
 			pidx=0;
 			statframe=0;
 
@@ -294,6 +324,7 @@ int main(void)
 	  }
 
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
 
 	}
