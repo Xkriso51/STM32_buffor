@@ -200,68 +200,44 @@ int checksum(char *buffer){
 }
 void get_line(){
 	//Zmienić sposób bez stat frame jedno pobranie pliku i sprawdzenie
-	//Napisać sume kontrolna
 	//Jakies funckjonalnosci - rozpoczac PWMa
 	char temp = get_char();
 	bfr[pidx]=temp;
-
-	if(statframe==0)
-	{
-		if(temp == 0x05)
-		{
-			statframe=1;
-			memset(&bfr[0],0,sizeof(bfr));
-		}
+	pidx++;
+	if(temp == 0x05){
+		pidx=0;
+		memset(&bfr[0],0,sizeof(bfr));
 	}
-	else if(statframe==1){
-		pidx++;
-		if(pidx > 261){
-			pidx=0;
-			statframe=0;
-
+	else if(pidx > 261){
+		pidx=0;
 		}
-
-		if(temp == 0x05){
-			pidx=0;
+	else if(temp == 0x04){
+		fsend(bfr);
+		fsend("\r\n");
+		int ordpidx;
+		int poi=0;
+		if(checksum(bfr)==1){
+			for(int i=1;i<=pidx;i++){
+				if(bfr[i] == ';'){
+					memset(&order[0],0,sizeof(order));
+					ordpidx=0;
+					while(poi<=i){
+						order[ordpidx]=bfr[poi];
+						ordpidx++;
+						poi++;
+					}
+					ordpidx=i+1;
+					doner(order);
+				}
+			}
 		}
-		if(temp == 0x04){
-
-			fsend(bfr);
+		else{
+			fsend("WRCHS%c%c",hex[1],hex[0]);
 			fsend("\r\n");
-			int ordpidx;
-			int poi=0;
-			if(checksum(bfr)==1)
-			{
-				for(int i=1;i<=pidx;i++){
-								if(bfr[i] == ';'){
-									memset(&order[0],0,sizeof(order));
-									ordpidx=0;
-									while(poi<=i){
-										order[ordpidx]=bfr[poi];
-										ordpidx++;
-										poi++;
-									}
-									ordpidx=i+1;
-									doner(order);
-								}
-							}
-			}
-			else{
-				fsend("WRCHS%c%c",hex[1],hex[0]);
-				fsend("\r\n");
-			}
-
-
-			pidx=0;
-			statframe=0;
-
-
 		}
+		pidx=0;
 	}
 }
-
-
-
 
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
