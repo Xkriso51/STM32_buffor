@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -39,6 +40,7 @@
 /* USER CODE BEGIN PD */
 #define BUF_TX_LEN 1024
 #define BUF_RX_LEN 512
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,13 +62,20 @@ __IO int busyRX=0;
 
 char bfr[261]; //ramka
 volatile uint16_t pidx=0;//wskaźnik ramki
-volatile uint8_t statframe=0; //status ramki
+volatile uint8_t fstate=0;
 char order[256]; //tablica polecenia
 char hex[2]; //wartosc hexadecymalna sumy
 
 int czas=10;//wartosc domyslna dla FTIME
-int wart=100;//wartosc domyslna dla FSIZE
-
+int wart=65535;//wartosc domyslna dla FSIZE
+int czest=10;
+int width = 0;
+int rise = 0;
+int fall = 0;
+int countered = 0;
+int licznik = 0;
+int datasentflag=0;
+uint32_t pwmData[32];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -128,32 +137,52 @@ void fsend(char* format, ...){
 void doner(char *ord){
 
 	if (strcmp("FCHKL;", ord) == 0){
-		fsend("Ilosc impulsow od zbocza narastajacego do opadajacego wynosi (liczba).\r\n");
+		if (fall > rise){
+			width = fall-rise;
+		}
+		else if (rise > fall){
+			width = rise - fall;
+		}
+
+		fsend("Ilosc impulsow od zbocza narastajacego do opadajacego wynosi %d.\r\n",width);
 	}
 	else if(strcmp("FCHKH;", ord) == 0){
-		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi (liczba).\r\n");
+
+		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi %d.\r\n",countered);
+
 	}
 	else if(strcmp("FSTART;", ord) == 0){
 		fsend("Rozpoczeto wysylanie impulsow \r\n");
+
 	}
 	else if(strcmp("FSTAT;", ord) == 0){
-		fsend("Wypelnienie (wartosc FSET) Czas (wartosc FTIME)\r\n");
+		fsend("Wypelnienie %d Czas %d Czestotliwosc %d\r\n",wart,czas,czest);
 	}
 	else if(sscanf(ord, "FTIME%d;", &czas) == 1 || strcmp("FTIME;", ord) == 0){
-		if(czas>=0 && czas<=120){
+		if(czas>=0 && czas<=20){
 			fsend("„Ustawiono czas na %d sekund.\r\n",czas);
 		}
 		else{
 			fsend("WRNUM\r\n");
 		}
 	}
-	else if(sscanf(ord, "FSET%d;", &wart) == 1 || strcmp("FSET;", ord) == 0){
-		if(wart>=0 && wart<=100){
-			fsend("„Ustawiono wypelnienie na %d %.\r\n",wart);
+	else if(sscanf(ord, "FFILL%d;", &wart) == 1 || strcmp("FFIL;", ord) == 0){
+		if(wart>=0 && wart<= 4294967295){
+			fsend("„Ustawiono wypelnienie na %d .\r\n",wart);
 		}
 		else{
 			fsend("WRNUM\r\n");
 		}
+	}
+	else if(sscanf(ord, "FSET%d;", &czest) == 1 || strcmp("FSET;", ord) == 0){
+		if(czest>=10 && czest<=1000){
+					fsend("„Ustawiono czestotliwosc na %d kH.\r\n",czest);
+					htim1.Init.Period = 72000/czest-1;
+					HAL_TIM_Base_Init(&htim1);
+				}
+				else{
+					fsend("WRNUM\r\n");
+				}
 	}
 	else{
 		fsend("WRCMD\r\n");
@@ -168,7 +197,7 @@ int checksum(char *buffer){
 	userSum[0]=buffer[strlen(buffer)-3];
 	userSum[1]=buffer[strlen(buffer)-2];
 
-	for(i = 0;i<strlen(buffer)-3;i++){
+	for(i = 0;i<strlen(buffer)-4;i++){
 		suma=suma+buffer[i];
 	}
 
@@ -199,40 +228,47 @@ int checksum(char *buffer){
 
 }
 void get_line(){
-	//Zmienić sposób bez stat frame jedno pobranie pliku i sprawdzenie
-	//Jakies funckjonalnosci - rozpoczac PWMa
 	char temp = get_char();
 	bfr[pidx]=temp;
 	pidx++;
 	if(temp == 0x05){
 		pidx=0;
 		memset(&bfr[0],0,sizeof(bfr));
+		fstate = 1;
 	}
 	else if(pidx > 261){
 		pidx=0;
 		}
-	else if(temp == 0x04){
-		fsend(bfr);
-		fsend("\r\n");
-		int ordpidx;
-		int poi=0;
-		if(checksum(bfr)==1){
-			for(int i=1;i<=pidx;i++){
-				if(bfr[i] == ';'){
-					memset(&order[0],0,sizeof(order));
-					ordpidx=0;
-					while(poi<=i){
-						order[ordpidx]=bfr[poi];
-						ordpidx++;
-						poi++;
+	else if(temp == 0x04 && fstate == 1){
+		fstate = 0;
+		if(strlen(bfr)>4){
+
+			fsend(bfr);
+			fsend("\r\n");
+			int ordpidx;
+			int poi=0;
+			if(checksum(bfr)==1){
+				for(int i=1;i<=pidx;i++){
+					if(bfr[i] == ';'){
+						memset(&order[0],0,sizeof(order));
+						ordpidx=0;
+						while(poi<=i){
+							order[ordpidx]=bfr[poi];
+							ordpidx++;
+							poi++;
+						}
+						ordpidx=i+1;
+						doner(order);
 					}
-					ordpidx=i+1;
-					doner(order);
 				}
+			}
+			else{
+				fsend("WRCHS%c%c",hex[1],hex[0]);
+				fsend("\r\n");
 			}
 		}
 		else{
-			fsend("WRCHS%c%c",hex[1],hex[0]);
+			fsend("WRFRM");
 			fsend("\r\n");
 		}
 		pidx=0;
@@ -266,6 +302,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	}
 }
 
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+
+}
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+
+}
 
 /* USER CODE END 0 */
 
@@ -300,6 +344,8 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
+  MX_DMA_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   fsend("Hello user\r\n");
 
@@ -336,12 +382,13 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
