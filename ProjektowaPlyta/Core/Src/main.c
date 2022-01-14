@@ -61,7 +61,8 @@ __IO int busyRX=0;
 
 char bfr[261]; //ramka
 volatile uint16_t pidx=0;//wskaźnik ramki
-volatile uint8_t fstate=0;
+int fstate = 0;
+enum state{active=1, inactive=0};
 char order[256]; //tablica polecenia
 char hex[2]; //wartosc hexadecymalna sumy
 
@@ -222,13 +223,13 @@ void get_line(){
 	if(temp == 0x05){
 		pidx=0;
 		memset(&bfr[0],0,sizeof(bfr));
-		fstate = 1;
+		fstate = active;
 	}
 	else if(pidx > 261){
 		pidx=0;
 		}
-	else if(temp == 0x04 && fstate == 1){
-		fstate = 0;
+	else if(temp == 0x04 && fstate == active){
+		fstate = inactive;
 		if(strlen(bfr)>4){
 
 			fsend(bfr);
