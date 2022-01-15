@@ -345,12 +345,12 @@ int main(void)
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 100);
 
-  LCD_print("[>  CHUJ    <]", 0, 0);
-  	  LCD_print("[>  CHUJ    <]", 0, 1);
-  	  LCD_print("[>  CHUJ    <]", 0, 2);
-  	  LCD_print("[>  CHUJ    <]", 0, 3);
-  	  LCD_print("[>  CHUJ    <]", 0, 4);
-  	  LCD_print("[>  CHUJ    <]", 0, 5);
+  LCD_print("Czestotliwosciomierz", 0, 0);
+  	  LCD_print("", 0, 1);
+  	  LCD_print("", 0, 2);
+  	  LCD_print("", 0, 3);
+  	  LCD_print("", 0, 4);
+  	  LCD_print("", 0, 5);
   /* USER CODE END 2 */
 
   /* Infinite loop */
