@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -29,6 +30,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <ctype.h>
+#include "nokia5110_LCD.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,7 +64,7 @@ __IO int busyRX=0;
 char bfr[261]; //ramka
 volatile uint16_t pidx=0;//wskaźnik ramki
 int fstate = 0;
-enum state{active=1, inactive=0};
+enum state{listen=1, notlisten=0};
 char order[256]; //tablica polecenia
 char hex[2]; //wartosc hexadecymalna sumy
 
@@ -75,7 +77,7 @@ int fall = 0;
 int countered = 0;
 int licznik = 0;
 int datasentflag=0;
-uint32_t pwmData[32];
+uint32_t pwmData = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -223,13 +225,13 @@ void get_line(){
 	if(temp == 0x05){
 		pidx=0;
 		memset(&bfr[0],0,sizeof(bfr));
-		fstate = active;
+		fstate = listen;
 	}
 	else if(pidx > 261){
 		pidx=0;
 		}
-	else if(temp == 0x04 && fstate == active){
-		fstate = inactive;
+	else if(temp == 0x04 && fstate == listen){
+		fstate = notlisten;
 		if(strlen(bfr)>4){
 
 			fsend(bfr);
@@ -262,6 +264,7 @@ void get_line(){
 		}
 		pidx=0;
 	}
+
 }
 
 
@@ -291,14 +294,11 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	}
 }
 
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef * htim){
+	HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
 }
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
 
-}
+
 
 /* USER CODE END 0 */
 
@@ -309,7 +309,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -325,17 +324,33 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  LCD_setRST(RST_GPIO_Port, RST_Pin);
+  LCD_setCE(CE_GPIO_Port, CE_Pin);
+  LCD_setDC(DC_GPIO_Port, DC_Pin);
+      LCD_setDIN(DIN_GPIO_Port, DIN_Pin);
+      LCD_setCLK(CLK_GPIO_Port, CLK_Pin);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_DMA_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
+  LCD_init();
   fsend("Hello user\r\n");
 
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 100);
+
+  LCD_print("[>  CHUJ    <]", 0, 0);
+  	  LCD_print("[>  CHUJ    <]", 0, 1);
+  	  LCD_print("[>  CHUJ    <]", 0, 2);
+  	  LCD_print("[>  CHUJ    <]", 0, 3);
+  	  LCD_print("[>  CHUJ    <]", 0, 4);
+  	  LCD_print("[>  CHUJ    <]", 0, 5);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -347,6 +362,7 @@ int main(void)
 	  if(busyRX!=emptyRX){
 		  get_line();
 	  }
+
 
     /* USER CODE END WHILE */
 
