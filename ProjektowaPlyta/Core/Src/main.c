@@ -71,13 +71,7 @@ char hex[2]; //wartosc hexadecymalna sumy
 int czas=10;//wartosc domyslna dla FTIME
 int wart=65535;//wartosc domyslna dla FSIZE
 int czest=10;
-int width = 0;
-int rise = 0;
-int fall = 0;
-int countered = 0;
-int licznik = 0;
-int datasentflag=0;
-uint32_t pwmData = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -141,6 +135,7 @@ void doner(char *ord){
 	if (strcmp("FCHKL;", ord) == 0){
 
 		fsend("Ilosc impulsow od zbocza narastajacego do opadajacego wynosi %d.\r\n",width);
+
 	}
 	else if(strcmp("FCHKH;", ord) == 0){
 
@@ -173,8 +168,7 @@ void doner(char *ord){
 	else if(sscanf(ord, "FSET%d;", &czest) == 1 || strcmp("FSET;", ord) == 0){
 		if(czest>=10 && czest<=1000){
 					fsend("„Ustawiono czestotliwosc na %d kH.\r\n",czest);
-					htim1.Init.Period = 72000/czest-1;
-					HAL_TIM_Base_Init(&htim1);
+
 				}
 				else{
 					fsend("WRNUM\r\n");
@@ -294,9 +288,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 	}
 }
 
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef * htim){
-	HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-}
 
 
 
@@ -338,18 +329,19 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM4_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   LCD_init();
   fsend("Hello user\r\n");
 
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1); //PWM dla ekranu
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 100);
 
-  LCD_print("Czestotliwosciomierz", 0, 0);
-  	  LCD_print("", 0, 1);
-  	  LCD_print("", 0, 2);
-  	  LCD_print("", 0, 3);
-  	  LCD_print("", 0, 4);
+  	  LCD_print("Miernik", 0, 0);
+  	  LCD_print("Czestotliwosci", 0, 1);
+  	  LCD_print("Autor", 0, 2);
+  	  LCD_print("Krzysztof", 0, 3);
+  	  LCD_print("Olejniczak", 0, 4);
   	  LCD_print("", 0, 5);
   /* USER CODE END 2 */
 
@@ -385,12 +377,13 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL16;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
