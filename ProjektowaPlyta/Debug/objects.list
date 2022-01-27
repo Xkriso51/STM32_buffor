@@ -1,4 +1,3 @@
-"./Core/Src/dma.o"
 "./Core/Src/gpio.o"
 "./Core/Src/main.o"
 "./Core/Src/nokia5110_LCD.o"

@@ -19,7 +19,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -69,8 +68,17 @@ char order[256]; //tablica polecenia
 char hex[2]; //wartosc hexadecymalna sumy
 
 int czas=10;//wartosc domyslna dla FTIME
-int wart=65535;//wartosc domyslna dla FSIZE
-int czest=10;
+int wart=32000;//wartosc domyslna dla FSIZE
+int czest=1000;
+
+uint32_t Is_First_Captured=0;
+uint32_t IC_Value1=0, IC_Value2=0;
+uint32_t Difference=0;
+uint32_t moj=0;
+
+uint32_t PWM_pulses_count = 0;
+uint32_t seconds_passed = 0;
+
 
 /* USER CODE END PV */
 
@@ -134,16 +142,24 @@ void doner(char *ord){
 
 	if (strcmp("FCHKL;", ord) == 0){
 
-		fsend("Ilosc impulsow od zbocza narastajacego do opadajacego wynosi %d.\r\n",width);
+		fsend("Ilosc impulsow od zbocza narastajacego do opadajacego wynosi %d.\r\n",Difference);
 
 	}
 	else if(strcmp("FCHKH;", ord) == 0){
 
-		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi %d.\r\n",countered);
+		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi %d.\r\n",PWM_pulses_count);
 
 	}
 	else if(strcmp("FSTART;", ord) == 0){
 		fsend("Rozpoczeto wysylanie impulsow \r\n");
+		seconds_passed=0;
+		//moj =63*(1000000/(czest*1000));
+		//htim1.Init.Period = moj;
+		//TIM1->CCR1 = wart;
+		//HAL_TIM_Base_Init(&htim1);
+		HAL_TIM_Base_Start_IT(&htim3);
+		HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+		HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 
 	}
 	else if(strcmp("FSTAT;", ord) == 0){
@@ -168,7 +184,6 @@ void doner(char *ord){
 	else if(sscanf(ord, "FSET%d;", &czest) == 1 || strcmp("FSET;", ord) == 0){
 		if(czest>=10 && czest<=1000){
 					fsend("„Ustawiono czestotliwosc na %d kH.\r\n",czest);
-
 				}
 				else{
 					fsend("WRNUM\r\n");
@@ -325,7 +340,6 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-  MX_DMA_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM4_Init();
@@ -337,7 +351,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1); //PWM dla ekranu
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 100);
 
-  	  LCD_print("Miernika", 0, 0);
+  	  LCD_print("Miernik", 0, 0);
   	  LCD_print("Czestotliwosci", 0, 1);
   	  LCD_print("Autor", 0, 2);
   	  LCD_print("Krzysztof", 0, 3);
@@ -404,7 +418,49 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
+	if(htim->Instance == TIM3){
+		seconds_passed += 1;
+		if(seconds_passed>=10)
+		{
+			HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
+			HAL_TIM_IC_Stop_IT(&htim2, TIM_CHANNEL_1);
+			HAL_TIM_Base_Stop_IT(&htim3);
+			fsend("Przesylanie zakonczone");
+		}
+	}
+
+}
+
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
+
+	if(htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1){
+		PWM_pulses_count += 1; //count number of consecutive impulses increased with every detected rising edge of PWM signal
+
+		if(Is_First_Captured == 0){
+			IC_Value1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+			Is_First_Captured = 1;
+
+
+		}else if(Is_First_Captured){
+			IC_Value2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+
+			if(IC_Value2 > IC_Value1){
+
+				Difference = IC_Value2 - IC_Value1;
+
+			}else{
+
+			}
+
+			Is_First_Captured = 0;
+		}
+
+
+	}
+}
 /* USER CODE END 4 */
 
 /**
