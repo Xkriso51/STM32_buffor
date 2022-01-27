@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -75,7 +76,7 @@ uint32_t Is_First_Captured=0;
 uint32_t IC_Value1=0, IC_Value2=0;
 uint32_t Difference=0;
 uint32_t moj=0;
-
+uint32_t pwmData[24]={2000, 2000, 4000, 4000, 4000, 4000, 2000, 2000, 4000, 4000, 4000, 4000, 2000, 2000, 2000, 4000, 2000, 4000, 2000, 4000, 4000, 4000, 2000, 4000};
 uint32_t PWM_pulses_count = 0;
 uint32_t seconds_passed = 0;
 
@@ -154,12 +155,12 @@ void doner(char *ord){
 		fsend("Rozpoczeto wysylanie impulsow \r\n");
 		seconds_passed=0;
 		//moj =63*(1000000/(czest*1000));
-		//htim1.Init.Period = moj;
-		//TIM1->CCR1 = wart;
+		//htim1.Init.Period = 63;
+		//wypelnienie(wart);
 		//HAL_TIM_Base_Init(&htim1);
 		HAL_TIM_Base_Start_IT(&htim3);
-		HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-		HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+		 HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+		HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t *)pwmData, 24);
 
 	}
 	else if(strcmp("FSTAT;", ord) == 0){
@@ -343,6 +344,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM4_Init();
+  MX_DMA_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   LCD_init();
@@ -418,16 +420,19 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	if(htim->Instance == TIM3){
 		seconds_passed += 1;
 		if(seconds_passed>=10)
 		{
-			HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
+			HAL_TIM_PWM_Stop_DMA(&htim1, TIM_CHANNEL_1);
 			HAL_TIM_IC_Stop_IT(&htim2, TIM_CHANNEL_1);
 			HAL_TIM_Base_Stop_IT(&htim3);
-			fsend("Przesylanie zakonczone");
+			fsend("Przesylanie zakonczone\r\n");
 		}
 	}
 
