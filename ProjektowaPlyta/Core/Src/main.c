@@ -337,7 +337,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1); //PWM dla ekranu
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 100);
 
-  	  LCD_print("Miernik", 0, 0);
+  	  LCD_print("Miernika", 0, 0);
   	  LCD_print("Czestotliwosci", 0, 1);
   	  LCD_print("Autor", 0, 2);
   	  LCD_print("Krzysztof", 0, 3);
