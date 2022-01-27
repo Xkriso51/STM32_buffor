@@ -69,17 +69,16 @@ char order[256]; //tablica polecenia
 char hex[2]; //wartosc hexadecymalna sumy
 
 int czas=10;//wartosc domyslna dla FTIME
-int wart=32000;//wartosc domyslna dla FSIZE
+int wart=65535;//wartosc domyslna dla FSIZE
 int czest=1000;
 
 uint32_t Is_First_Captured=0;
 uint32_t IC_Value1=0, IC_Value2=0;
 uint32_t Difference=0;
-uint32_t moj=0;
-uint32_t pwmData[24]={2000, 2000, 4000, 4000, 4000, 4000, 2000, 2000, 4000, 4000, 4000, 4000, 2000, 2000, 2000, 4000, 2000, 4000, 2000, 4000, 4000, 4000, 2000, 4000};
+uint32_t pwmData[24];
 uint32_t PWM_pulses_count = 0;
 uint32_t seconds_passed = 0;
-
+uint32_t period=0;
 
 /* USER CODE END PV */
 
@@ -139,6 +138,17 @@ void fsend(char* format, ...){
 	__enable_irq();
 }
 
+void wypelnienie(int wartosc, uint32_t period){
+
+		for (int i=23; i>=0; i--)
+		{
+			if (wartosc&(1<<i))
+			{
+				pwmData[i] = 6*(period/10);
+			}
+			else pwmData[i] = 3*(period/10);
+		}
+}
 void doner(char *ord){
 
 	if (strcmp("FCHKL;", ord) == 0){
@@ -154,10 +164,9 @@ void doner(char *ord){
 	else if(strcmp("FSTART;", ord) == 0){
 		fsend("Rozpoczeto wysylanie impulsow \r\n");
 		seconds_passed=0;
-		//moj =63*(1000000/(czest*1000));
-		//htim1.Init.Period = 63;
-		//wypelnienie(wart);
-		//HAL_TIM_Base_Init(&htim1);
+		period = 63*(1000000/(czest*1000));
+		htim1.Init.Period = period;
+		wypelnienie(wart,period);
 		HAL_TIM_Base_Start_IT(&htim3);
 		 HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 		HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t *)pwmData, 24);
