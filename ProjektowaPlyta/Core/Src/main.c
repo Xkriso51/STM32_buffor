@@ -62,20 +62,19 @@ __IO int busyRX=0;
 
 
 char bfr[261]; //ramka
-volatile uint16_t pidx=0;//wskaźnik ramki
+volatile uint16_t fid=0;//wskaźnik ramki
 int fstate = 0;
 enum state{listen=1, notlisten=0};
 char order[256]; //tablica polecenia
-char hex[2]; //wartosc hexadecymalna sumy
 
 int czas=10;//wartosc domyslna dla FTIME
-int wart=65535;//wartosc domyslna dla FSIZE
-int czest=1000;
+int wart=65535;//wartosc domyslna dla FFILL
+int czest=1000;//wartos domyslna dla FSET
 
-uint32_t Is_First_Captured=0;
+uint8_t Is_First_Captured=0;
 uint32_t IC_Value1=0, IC_Value2=0;
 uint32_t Difference=0;
-uint32_t pwmData[24];
+uint32_t pwmData[32];
 uint32_t PWM_pulses_count = 0;
 uint32_t seconds_passed = 0;
 uint32_t period=0;
@@ -107,6 +106,20 @@ uint8_t get_char(){
 		return 0;
 	}
 }
+int checkSum(char *buffer)
+{
+	int suma = 0;
+	int dlugosc = strlen(buffer);
+	int i;
+	for(i = 0; i<dlugosc-1; i++){
+			suma=suma+buffer[i];
+		}
+	return suma%256;
+}
+void fmessage(char msg[], char output[]){
+	int ctrlSumMsg = checkSum(msg);
+	sprintf(output, "0x05%s\r\n%02X0x04",msg,ctrlSumMsg);
+}
 void fsend(char* format, ...){
 	char tmp_rs[128];
 	int i;
@@ -115,6 +128,8 @@ void fsend(char* format, ...){
 	va_start(arglist, format);
 	vsprintf(tmp_rs, format, arglist);
 	va_end(arglist);
+	char fmsg[128]={0};
+	fmessage(tmp_rs, fmsg);
 	pid = emptyTX;
 	for(i = 0; i < strlen(tmp_rs); i++){
 		Buf_TX[pid] = tmp_rs[i];
@@ -140,7 +155,7 @@ void fsend(char* format, ...){
 
 void wypelnienie(int wartosc, uint32_t period){
 
-		for (int i=23; i>=0; i--)
+		for (int i=31; i>=0; i--)
 		{
 			if (wartosc&(1<<i))
 			{
@@ -169,7 +184,7 @@ void doner(char *ord){
 		wypelnienie(wart,period);
 		HAL_TIM_Base_Start_IT(&htim3);
 		 HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-		HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t *)pwmData, 24);
+		HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t *)pwmData, 32);
 
 	}
 	else if(strcmp("FSTAT;", ord) == 0){
@@ -205,83 +220,73 @@ void doner(char *ord){
 
 }
 
-int checksum(char *buffer){
+int hexVal(char *buffer){
 	int suma = 0;
+	int dlugosc = strlen(buffer);
 	int i;
-	char userSum[2];
-	userSum[0]=buffer[strlen(buffer)-3];
-	userSum[1]=buffer[strlen(buffer)-2];
-
-	for(i = 0;i<strlen(buffer)-4;i++){
-		suma=suma+buffer[i];
-	}
-	int mod=suma%256;
-	long temp;
-	int j=0;
-	while (mod != 0){
-		temp = mod % 16;
-		if (temp < 10)
-			hex[j++] = 48 + temp;
-		else
-		    hex[j++] = 55 + temp;
-		mod = mod / 16;
-	}
-
-	if(hex[1]==userSum[0] && hex[0]==userSum[1])
-	{
-		return 1;
-	}
-	else
-	{
-		return 0;
-	}
-
-}
-void get_line(){
-	char temp = get_char();
-	bfr[pidx]=temp;
-	pidx++;
-	if(temp == 0x05){
-		pidx=0;
-		memset(&bfr[0],0,sizeof(bfr));
-		fstate = listen;
-	}
-	else if(pidx > 261){
-		pidx=0;
+	int miejsca = 1;
+	for(i = dlugosc-1; i>=0; i--){
+		if(buffer[i]>='0' && buffer[i]<='9'){
+			suma = suma +(buffer[i] - 48)*miejsca;
+		}else if(buffer[i]>='A' && buffer[i]<='F'){
+			suma = suma +(buffer[i] - 55)*miejsca;
 		}
+		miejsca = miejsca*16;
+	}
+	return suma;
+}
+
+void get_line(){
+	char temp = get_char();//Pobranie znaku do zmiennej
+
+	if(temp==0x05){
+		fstate=listen;
+		fid = 0;
+		memset(&bfr[0],0, sizeof(bfr));
+		bfr[fid] = temp;
+		fid = fid+1;
+	}
 	else if(temp == 0x04 && fstate == listen){
 		fstate = notlisten;
-		if(strlen(bfr)>4){
-
-			fsend(bfr);
-			fsend("\r\n");
-			int ordpidx;
-			int poi=0;
-			if(checksum(bfr)==1){
-				for(int i=1;i<=pidx;i++){
-					if(bfr[i] == ';'){
-						memset(&order[0],0,sizeof(order));
-						ordpidx=0;
-						while(poi<=i){
-							order[ordpidx]=bfr[poi];
-							ordpidx++;
-							poi++;
-						}
-						ordpidx=i+1;
-						doner(order);
+		bfr[fid]= temp;
+		fid++;
+		char ctrlSumFrame[3]={bfr[fid-3],
+				bfr[fid-2], '\0'};
+		int ctrlSumUser = hexVal(ctrlSumFrame);
+		bfr[fid-3]='\0';
+		memmove(&bfr[0],&bfr[1],strlen(bfr));
+		int ctrlSumProgram = checkSum(bfr);
+		if(ctrlSumProgram == ctrlSumUser){
+			int frm_id = 0;
+			int ord_id;
+			int i;
+			for(i = 0; i< fid; i++){
+				if(bfr[i]==';'){
+					memset(&order[0],0,sizeof(order));
+					ord_id = 0;
+					while(frm_id <= i){
+						order[ord_id] = bfr[frm_id];
+						frm_id++;
+						ord_id++;
 					}
+					frm_id = i + 1;
+					doner(order);
 				}
 			}
-			else{
-				fsend("WRCHS%c%c",hex[1],hex[0]);
-				fsend("\r\n");
+		}else{
+			fsend("WRCHS%02X",ctrlSumProgram);
+		}
+	}else if(fstate == listen){
+		if(!(temp > 0x21 && temp < 0x7E)){
+			fsend("WRCHA\r\n");
+		}else{
+			bfr[fid] = temp;
+			fid = fid + 1;
+			if(fid > 256 ){
+				fsend("WRFRM\r\n");
+				fstate = notlisten;
 			}
 		}
-		else{
-			fsend("WRFRM");
-			fsend("\r\n");
-		}
-		pidx=0;
 	}
 
 }
