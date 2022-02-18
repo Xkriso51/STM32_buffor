@@ -122,17 +122,17 @@ int checkSum(char *buffer)
 }
 void fmessage(char msg[], char dst[]){
 	int ctrlSumMsg = checkSum(msg);
-	sprintf(dst, "%c%s%02X%c\r\n",EOT,msg,ctrlSumMsg,ENQ);
+	sprintf(dst, "%c%s;%02X%c\r\n",EOT,msg,ctrlSumMsg,ENQ);
 }
 void fsend(char* format, ...){
-	char tmp_rs[128];
+	char tmp_rs[256];
 	int i;
 	__IO int pid;
 	va_list arglist;
 	va_start(arglist, format);
 	vsprintf(tmp_rs, format, arglist);
 	va_end(arglist);
-	char fmsg[128]={0};
+	char fmsg[261]={0};
 	fmessage(tmp_rs, fmsg);
 	pid = emptyTX;
 	for(i = 0; i < strlen(fmsg); i++){
@@ -159,22 +159,13 @@ void fsend(char* format, ...){
 
 void wypelnienie(int wartosc, uint32_t period){
 
-	for(int i = 0; i<=3; i++){
-		if(wartosc>period){
-			pwmData[i]=period;
-			wartosc = wartosc/period;
-		}
-		else{
-			pwmData[i] = wartosc;
-			wartosc =1;
-		}
-	}
+
 }
 
 void start(){
-			period=(64000/czest)-1;
+			period=(64000000/(czest*1000))-1;
 			wypelnienie(wart,period);
-			TIM1->CCR1=pwmData[0];
+			TIM1->CCR1=wart;
 			htim1.Init.Period = period;
 			HAL_TIM_Base_Start_IT(&htim3);
 			HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1,(uint32_t *)pwmData, 4);
@@ -185,16 +176,16 @@ void doner(char *ord){
 
 	if (strcmp("FCHKL;", ord) == 0){
 
-		fsend("Ilosc impulsow od zbocza narastajacego do opadajacego wynosi %d;",Difference);
+		fsend("Ilosc impulsow od zbocza narastajacego do opadajacego wynosi %d",Difference);
 
 	}
 	else if(strcmp("FCHKH;", ord) == 0){
 
-		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi %d;",riseCaptured/4);
+		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi %d",riseCaptured/4);
 
 	}
 	else if(strcmp("FSTART;", ord) == 0){
-		fsend("Rozpoczeto wysylanie impulsow;");
+		fsend("Rozpoczeto wysylanie impulsow");
 		seconds_passed=0;
 		Difference = 0;
 		riseCaptured = 0;
@@ -202,34 +193,34 @@ void doner(char *ord){
 		start();
 	}
 	else if(strcmp("FSTAT;", ord) == 0){
-		fsend("Wypelnienie %d Czas %d Czestotliwosc %d;",wart,czas,czest);
+		fsend("Wypelnienie %d Czas %d Czestotliwosc %d",wart,czas,czest);
 	}
 	else if(sscanf(ord, "FTIME%d;", &czas) == 1 || strcmp("FTIME;", ord) == 0){
 		if(czas>=0 && czas<=20){
-			fsend("„Ustawiono czas na %d sekund;",czas);
+			fsend("Ustawiono czas na %d sekund",czas);
 		}
 		else{
-			fsend("WRNUM;");
+			fsend("WRNUM");
 		}
 	}
 	else if(sscanf(ord, "FFILL%d;", &wart) == 1 || strcmp("FFIL;", ord) == 0){
 		if(wart>=0 && wart<= 4294967295){
-			fsend("„Ustawiono wypelnienie na %d;",wart);
+			fsend("Ustawiono wypelnienie na %d",wart);
 		}
 		else{
-			fsend("WRNUM;");
+			fsend("WRNUM");
 		}
 	}
 	else if(sscanf(ord, "FSET%d;", &czest) == 1 || strcmp("FSET;", ord) == 0){
 		if(czest>=1 && czest<=250){
-					fsend("„Ustawiono czestotliwosc na %d kHz;",czest);
+					fsend("Ustawiono czestotliwosc na %d kHz",czest);
 				}
 				else{
-					fsend("WRNUM;");
+					fsend("WRNUM");
 				}
 	}
 	else{
-		fsend("WRCMD;");
+		fsend("WRCMD");
 	}
 
 }
@@ -288,16 +279,17 @@ void get_analyze(){
 				}
 			}
 		}else{
-			fsend("WRCHS%02X;",ctrlSumProgram);
+			fsend("WRCHS%02X",ctrlSumProgram);
 		}
 	}else if(fstate == listen){
 		if(!(temp > 0x21 && temp < 0x7E)){
-			fsend("WRCHA;");
+			fsend("WRFRM");
+			fstate = notlisten;
 		}else{
 			bfr[fid] = temp;
 			fid = fid + 1;
-			if(fid > 256 ){
-				fsend("WRFRM;");
+			if(fid > 261){
+				fsend("WRFRL");
 				fstate = notlisten;
 			}
 		}
@@ -376,7 +368,7 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
   LCD_init();
-  fsend("Hello user;");
+  fsend("Czestotliwosciomierz");
 
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1); //PWM dla ekranu
   __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 100);
@@ -436,7 +428,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL8;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -504,7 +496,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			HAL_TIM_IC_Stop_DMA(&htim2, TIM_CHANNEL_2);
 			HAL_TIM_Base_Stop_IT(&htim3);
 
-			fsend("Przesylanie zakonczone;");
+			fsend("Przesylanie zakonczone");
 		}
 	}
 
