@@ -30,7 +30,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <ctype.h>
-#include "nokia5110_LCD.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,7 +66,7 @@ int fstate = 0;
 enum state{listen=1, notlisten=0};
 char order[256]; //tablica polecenia
 int czas=10;//wartosc domyslna dla FTIME
-int wart=65535;//wartosc domyslna dla FFILL
+unsigned long wart=65535;//wartosc domyslna dla FFILL
 int czest=10;//wartos domyslna dla FSET
 char ENQ = 0x05;
 char EOT = 0x04;
@@ -74,10 +74,11 @@ char EOT = 0x04;
 
 uint32_t Difference=0;
 uint32_t pwmData[4];
+uint32_t pwmLen = 0;
 uint32_t seconds_passed = 0;
 uint32_t period=0;
 int licznik=0;
-int width = 1;
+int width = 0;
 int riseCaptured = 0;
 int fallCaptured = 0;
 uint32_t riseData[1];
@@ -158,17 +159,26 @@ void fsend(char* format, ...){
 }
 
 void wypelnienie(int wartosc, uint32_t period){
-
-
+	for(int i = 0; i<=3; i++){
+			if(wartosc>period){
+				pwmData[i]=period;
+				wartosc = wartosc/period;
+			}
+			else{
+				pwmData[i]=wartosc;
+				pwmLen=i+1;
+				i=4;
+			}
+		}
 }
 
 void start(){
 			period=(64000000/(czest*1000))-1;
 			wypelnienie(wart,period);
-			TIM1->CCR1=wart;
+			TIM1->CCR1=pwmData[0];
 			htim1.Init.Period = period;
 			HAL_TIM_Base_Start_IT(&htim3);
-			HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1,(uint32_t *)pwmData, 4);
+			HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t *)pwmData, pwmLen);
 			HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_1,riseData,1);
 			HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_2,fallData,1);
 }
@@ -181,7 +191,7 @@ void doner(char *ord){
 	}
 	else if(strcmp("FCHKH;", ord) == 0){
 
-		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi %d",riseCaptured/4);
+		fsend("Ilosc impulsow wyslanych w zadanym czasie wynosi %d",riseCaptured/pwmLen);
 
 	}
 	else if(strcmp("FSTART;", ord) == 0){
@@ -193,7 +203,7 @@ void doner(char *ord){
 		start();
 	}
 	else if(strcmp("FSTAT;", ord) == 0){
-		fsend("Wypelnienie %d Czas %d Czestotliwosc %d",wart,czas,czest);
+		fsend("Wypelnienie %u Czas %d Czestotliwosc %d",wart,czas,czest);
 	}
 	else if(sscanf(ord, "FTIME%d;", &czas) == 1 || strcmp("FTIME;", ord) == 0){
 		if(czas>=0 && czas<=20){
@@ -203,9 +213,9 @@ void doner(char *ord){
 			fsend("WRNUM");
 		}
 	}
-	else if(sscanf(ord, "FFILL%d;", &wart) == 1 || strcmp("FFIL;", ord) == 0){
+	else if(sscanf(ord, "FFILL%u;", &wart) == 1 || strcmp("FFIL;", ord) == 0){
 		if(wart>=0 && wart<= 4294967295){
-			fsend("Ustawiono wypelnienie na %d",wart);
+			fsend("Ustawiono wypelnienie na %u",wart);
 		}
 		else{
 			fsend("WRNUM");
@@ -266,7 +276,7 @@ void get_analyze(){
 			int ord_id;
 			int i;
 			for(i = 0; i< fid; i++){
-				if(bfr[i]==';'){
+				if(bfr[i]==';' && bfr[i-1]!=';' && i!=0){
 					memset(&order[0],0,sizeof(order));
 					ord_id = 0;
 					while(frm_id <= i){
@@ -289,7 +299,7 @@ void get_analyze(){
 			bfr[fid] = temp;
 			fid = fid + 1;
 			if(fid > 261){
-				fsend("WRFRL");
+				fsend("WRFRM");
 				fstate = notlisten;
 			}
 		}
@@ -351,11 +361,7 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-  LCD_setRST(RST_GPIO_Port, RST_Pin);
-  LCD_setCE(CE_GPIO_Port, CE_Pin);
-  LCD_setDC(DC_GPIO_Port, DC_Pin);
-      LCD_setDIN(DIN_GPIO_Port, DIN_Pin);
-      LCD_setCLK(CLK_GPIO_Port, CLK_Pin);
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -363,18 +369,11 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
-  MX_TIM4_Init();
   MX_DMA_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  LCD_init();
+
   fsend("Czestotliwosciomierz");
-
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1); //PWM dla ekranu
-  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, 100);
-
-  	  LCD_print("Miernik", 0, 0);
-  	  LCD_print("Czestotliwosci", 0, 1);
 
   /* USER CODE END 2 */
 
@@ -461,26 +460,28 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		{
 
 			fallCaptured++;
-			if(licznik>3){
-				licznik = 0;
-			}
-			TIM1->CCR1=pwmData[licznik];
-			licznik++;
+
 
 		}
 		if ((riseCaptured)&&(fallCaptured)){
 
-			isMeasured = 1;
-			width++;
-			if(width<=4){
-				if(fallData[0]>riseData[0]){
-					Difference = Difference + (fallData[0]-riseData[0]);
-				}else{
-					Difference = Difference + (riseData[0]-fallData[0]);
-				}
+			if(licznik>pwmLen-1){
+				licznik = 0;
 			}
+			TIM1->CCR1=pwmData[licznik];
+			licznik++;
+			isMeasured = 1;
 
+			if(width<pwmLen){
+				if(fallData[0]>riseData[0]){
+						Difference = Difference+(fallData[0]-riseData[0]);
+					}
+				else{
+						Difference = Difference+(riseData[0]-fallData[0]);
 
+					}
+				width++;
+			}
 		}
 }
 
